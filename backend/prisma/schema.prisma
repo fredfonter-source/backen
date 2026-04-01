@@ -1,0 +1,468 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ContentStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum AccessType {
+  FREE
+  PAID
+}
+
+enum UserRole {
+  ADMIN
+  RESELLER
+  USER
+}
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+  EXPIRED
+}
+
+enum MatchStatus {
+  UPCOMING
+  LIVE
+  FINISHED
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  passwordHash String
+  name         String?
+  role         UserRole      @default(USER)
+  resellerId   String?
+  reseller     User?         @relation("ResellerUsers", fields: [resellerId], references: [id])
+  subUsers     User[]        @relation("ResellerUsers")
+  status       AccountStatus @default(ACTIVE)
+  expiresAt    DateTime?
+  planId       String?
+  plan         SubscriptionPlan? @relation(fields: [planId], references: [id])
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model SubscriptionPlan {
+  id           String        @id @default(cuid())
+  name         String
+  durationDays Int
+  priceCents   Int
+  deviceLimit  Int
+  adsEnabled   Boolean       @default(true)
+  status       ContentStatus @default(PUBLISHED)
+  users        User[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model Movie {
+  id              String        @id @default(cuid())
+  title           String
+  description     String
+  posterUrl       String?
+  thumbnailUrl    String?
+  trailerUrl      String?
+  imdbId          String?
+  genres          String[]
+  language        String
+  actors          String[]
+  directors       String[]
+  releaseDate     DateTime?
+  durationMinutes Int?
+  maturityRating  String?
+  status          ContentStatus @default(PUBLISHED)
+  access          AccessType    @default(FREE)
+  seoTitle        String?
+  seoDescription  String?
+  seoKeywords     String?
+  qualities       MovieQuality[]
+  subtitles       MovieSubtitle[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+model MovieQuality {
+  id        String   @id @default(cuid())
+  movieId   String
+  movie     Movie    @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  label     String   // e.g. 480p, 720p, 1080p
+  hlsUrl    String
+  createdAt DateTime @default(now())
+}
+
+model MovieSubtitle {
+  id        String   @id @default(cuid())
+  movieId   String
+  movie     Movie    @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  language  String   // e.g. en, es, ar
+  url       String
+  createdAt DateTime @default(now())
+}
+
+model Series {
+  id             String        @id @default(cuid())
+  title          String
+  description    String
+  posterUrl      String?
+  thumbnailUrl   String?
+  trailerUrl     String?
+  imdbId         String?
+  genres         String[]
+  language       String
+  actors         String[]
+  directors      String[]
+  releaseDate    DateTime?
+  maturityRating String?
+  status         ContentStatus @default(PUBLISHED)
+  access         AccessType    @default(FREE)
+  seoTitle       String?
+  seoDescription String?
+  seoKeywords    String?
+  seasons        Season[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+}
+
+model Season {
+  id           String   @id @default(cuid())
+  seriesId     String
+  series       Series   @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  seasonNumber Int
+  title        String?
+  episodes     Episode[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([seriesId, seasonNumber])
+}
+
+model Episode {
+  id             String   @id @default(cuid())
+  seasonId       String
+  season         Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  episodeNumber  Int
+  title          String
+  description    String?
+  thumbnailUrl   String?
+  durationMinutes Int?
+  status         ContentStatus @default(PUBLISHED)
+  access         AccessType @default(FREE)
+  qualities      EpisodeQuality[]
+  subtitles      EpisodeSubtitle[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([seasonId, episodeNumber])
+}
+
+model EpisodeQuality {
+  id        String   @id @default(cuid())
+  episodeId String
+  episode   Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  label     String
+  hlsUrl    String
+  createdAt DateTime @default(now())
+}
+
+model EpisodeSubtitle {
+  id        String   @id @default(cuid())
+  episodeId String
+  episode   Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  language  String
+  url       String
+  createdAt DateTime @default(now())
+}
+
+model LiveChannel {
+  id        String        @id @default(cuid())
+  name      String
+  logoUrl   String?
+  streamUrl String
+  category  String
+  status    ContentStatus @default(PUBLISHED)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+}
+
+model FootballMatch {
+  id            String      @id @default(cuid())
+  league        String
+  team1Name     String
+  team1LogoUrl  String?
+  team2Name     String
+  team2LogoUrl  String?
+  startsAt      DateTime
+  bannerUrl     String?
+  description   String?
+  status        MatchStatus @default(UPCOMING)
+  servers       MatchServer[]
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+model MatchServer {
+  id        String   @id @default(cuid())
+  matchId   String
+  match     FootballMatch @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  name      String
+  hlsUrl    String
+  createdAt DateTime @default(now())
+}
+
+model AppSettings {
+  id                       String   @id @default("global")
+  tmdbApiKey               String?
+  applovinSdkKey           String?
+  applovinBannerAdUnitId   String?
+  applovinRewardedAdUnitId String?
+  applovinInterstitialAdUnitId String?
+  notificationsEnabled     Boolean  @default(true)
+  generalJson              Json?
+  updatedAt                DateTime @updatedAt
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ContentStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum AccessType {
+  FREE
+  PAID
+}
+
+enum UserRole {
+  ADMIN
+  RESELLER
+  USER
+}
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+  EXPIRED
+}
+
+enum MatchStatus {
+  UPCOMING
+  LIVE
+  FINISHED
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  passwordHash String
+  name         String?
+  role         UserRole      @default(USER)
+  resellerId   String?
+  reseller     User?         @relation("ResellerUsers", fields: [resellerId], references: [id])
+  subUsers     User[]        @relation("ResellerUsers")
+  status       AccountStatus @default(ACTIVE)
+  expiresAt    DateTime?
+  planId       String?
+  plan         SubscriptionPlan? @relation(fields: [planId], references: [id])
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model SubscriptionPlan {
+  id          String   @id @default(cuid())
+  name        String
+  durationDays Int
+  priceCents  Int
+  deviceLimit Int
+  adsEnabled  Boolean  @default(true)
+  status      ContentStatus @default(PUBLISHED)
+  users       User[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Movie {
+  id            String        @id @default(cuid())
+  title         String
+  description   String
+  posterUrl     String?
+  thumbnailUrl  String?
+  trailerUrl    String?
+  imdbId        String?
+  genres        String[]
+  language      String
+  actors        String[]
+  directors     String[]
+  releaseDate   DateTime?
+  durationMinutes Int?
+  maturityRating String?
+  status        ContentStatus @default(PUBLISHED)
+  access        AccessType    @default(FREE)
+  seoTitle      String?
+  seoDescription String?
+  seoKeywords   String?
+  qualities     MovieQuality[]
+  subtitles     MovieSubtitle[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model MovieQuality {
+  id        String @id @default(cuid())
+  movieId   String
+  movie     Movie  @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  label     String // e.g. 480p, 720p, 1080p
+  hlsUrl    String
+  createdAt DateTime @default(now())
+}
+
+model MovieSubtitle {
+  id        String @id @default(cuid())
+  movieId   String
+  movie     Movie  @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  language  String // e.g. en, es, ar
+  url       String
+  createdAt DateTime @default(now())
+}
+
+model Series {
+  id            String        @id @default(cuid())
+  title         String
+  description   String
+  posterUrl     String?
+  thumbnailUrl  String?
+  trailerUrl    String?
+  imdbId        String?
+  genres        String[]
+  language      String
+  actors        String[]
+  directors     String[]
+  releaseDate   DateTime?
+  maturityRating String?
+  status        ContentStatus @default(PUBLISHED)
+  access        AccessType    @default(FREE)
+  seoTitle      String?
+  seoDescription String?
+  seoKeywords   String?
+  seasons       Season[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model Season {
+  id        String @id @default(cuid())
+  seriesId  String
+  series    Series @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  seasonNumber Int
+  title     String?
+  episodes  Episode[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([seriesId, seasonNumber])
+}
+
+model Episode {
+  id          String @id @default(cuid())
+  seasonId    String
+  season      Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  episodeNumber Int
+  title       String
+  description String?
+  thumbnailUrl String?
+  durationMinutes Int?
+  status      ContentStatus @default(PUBLISHED)
+  access      AccessType @default(FREE)
+  qualities   EpisodeQuality[]
+  subtitles   EpisodeSubtitle[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([seasonId, episodeNumber])
+}
+
+model EpisodeQuality {
+  id        String @id @default(cuid())
+  episodeId String
+  episode   Episode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  label     String
+  hlsUrl    String
+  createdAt DateTime @default(now())
+}
+
+model EpisodeSubtitle {
+  id        String @id @default(cuid())
+  episodeId String
+  episode   Episode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  language  String
+  url       String
+  createdAt DateTime @default(now())
+}
+
+model LiveChannel {
+  id        String @id @default(cuid())
+  name      String
+  logoUrl   String?
+  streamUrl String
+  category  String
+  status    ContentStatus @default(PUBLISHED)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model FootballMatch {
+  id          String @id @default(cuid())
+  league      String
+  team1Name   String
+  team1LogoUrl String?
+  team2Name   String
+  team2LogoUrl String?
+  startsAt    DateTime
+  bannerUrl   String?
+  description String?
+  status      MatchStatus @default(UPCOMING)
+  servers     MatchServer[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model MatchServer {
+  id        String @id @default(cuid())
+  matchId   String
+  match     FootballMatch @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  name      String
+  hlsUrl    String
+  createdAt DateTime @default(now())
+}
+
+model AppSettings {
+  id              String @id @default("global")
+  tmdbApiKey      String?
+  applovinSdkKey  String?
+  applovinBannerAdUnitId String?
+  applovinRewardedAdUnitId String?
+  applovinInterstitialAdUnitId String?
+  notificationsEnabled Boolean @default(true)
+  generalJson     Json?
+  updatedAt       DateTime @updatedAt
+}
+
